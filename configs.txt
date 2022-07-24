@@ -1,0 +1,210 @@
+stp
+----
+en
+conf t
+spanning-tree vlan 1
+
+_____________________________________________________
+A mistake (VTP):
+----------
+Firstly; I tried making one of the access switches
+a vtp server, that caused massive broadcast overload
+and actually broke the network.
+The second try was with the core switch, the one not
+connected to the router, it had the same effect.
+
+The more transparent steps there are, the 
+more crippled the network becomes.. 
+
+The last try was to make it on the distribution
+layer (all of them configured as servers)
+This has considerably reduced the transaction flood
+and the network is back on
+
+Conclusion: Whenever using VTP, try to give the clients 
+direct access to the server, using transparent mode
+can cause serious issues
+_____________________________________________________
+
+
+All distribution switches:
+-----------------------
+en
+conf t
+vlan 2
+name Sector2
+vlan 3
+name Sector3
+exit
+
+vtp version 2
+vtp mode server
+vtp domain IT
+vtp password 1234
+end
+
+
+All access switches
+--------------------------
+en
+conf t
+vtp version 2
+vtp mode client
+vtp domain IT
+vtp password 1234
+
+ports
+-----
+en
+conf t
+
+interface fa0/24
+switchport mode access
+switch access vlan 1
+
+interface fa0/23
+switchport mode access
+switch access vlan 2
+
+interface fa0/22
+switchport mode access
+switch access vlan 3
+end
+
+Core switches: SVIs
+----------------------
+en
+conf t
+ip routing
+interface vlan 1
+ip address 10.0.0.1 255.255.255.0
+interface vlan 2
+ip address 10.0.1.1 255.255.255.0
+interface vlan 3
+ip address 10.0.2.1 255.255.255.0
+end
+
+router_dhcp
+-----------
+ip dhcp excluded-address 10.0.0.1
+ip dhcp excluded-address 10.0.1.1
+ip dhcp excluded-address 10.0.2.1
+
+ip dhcp pool vlan_1
+
+network 10.0.0.0 255.255.255.0
+exit
+
+
+
+ip dhcp pool sector2
+
+network 10.0.1.0 255.255.255.0
+exit
+
+
+ip dhcp pool sector3
+network 10.0.2.0 255.255.255.0
+end
+
+--------------------------------------------------------------
+ssh (all switches, router is the same
+but with user name R0)
+--------------------------------------
+en
+conf t
+enable secret 1234
+username admin password 1234
+ip domain-name IT
+crypto key generate rsa
+yes
+1024
+
+line vty 0 15
+transport input ssh
+login local
+
+end
+
+conf t
+int vlan 1 
+ip addr dhcp
+no sh
+end
+
+
+
+--------------------------------------------------------------
+Access-lists
+------------
+all on the router
+--------------------------------------------------------------
+port security
+-------------
+access switches
+----------------
+////////////////
+Not successful
+////////////////////////////////////////
+en
+conf t
+int ra fa0/1-2
+switchport port-security max 
+switchport port-security mac-address sticky 
+switchport port-security violation shutdown 
+switchport port-security 
+/////////////////////////////////////////
+works (workds only with access ports)
+//////////////////////////////////////
+int ra fa0/22-24
+switchport port-security max 2
+switchport port-security mac-address sticky 
+switchport port-security violation shutdown 
+switchport port-security 
+
+int ra fa0/3-21, g0/1-2
+sh
+exit
+
+/////////////////
+Not successful
+////////////////////////////////////////////////
+distribution  and core switches 
+-------------------------------
+en
+1234
+conf t
+int ra fa0/1-4
+switchport port-security max 100
+switchport port-security mac-address sticky 
+switchport port-security violation shutdown 
+switchport port-security 
+sh 
+no sh
+end
+
+int ra fa0/5-24, g0/1-2
+sh
+exit
+
+for switches 5 and 6
+----------------------
+int ra fa0/5-8
+no sh
+exit
+
+for MS0
+---------
+int g0/1
+switchport port-sec max 3
+no sh
+exit
+//////////////////////////////////////////////////////////////
+___________________________________________________
+A mistake
+----------
+one ip route is written in a multilayer switch,
+it will needs static or dyamic routing
+to be able to go beyond the router...
+don't forget that.
+___________________________________________________
